@@ -18,6 +18,7 @@ import importlib
 import os
 import re
 import tempfile
+import tkinter as tk
 import warnings
 import webbrowser
 import zipfile
@@ -25,6 +26,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
@@ -34,17 +36,19 @@ LEDGER_SHEET = "App Collections"
 START_MONTH = date(2026, 7, 1)
 SCHEDULE_LENGTH = 30
 
-BACKGROUND = "#F1F5F9"
+BACKGROUND = "#F8FAFC"
 CARD = "#FFFFFF"
+CARD_BORDER = "#E2E8F0"
 TEXT = "#172033"
 MUTED = "#53657D"
-GREEN = "#13804A"
+GREEN = "#10B981"
 GREEN_LIGHT = "#DCFCE7"
-RED = "#B42318"
-RED_LIGHT = "#FEE4E2"
-AMBER = "#A15C00"
+RED = "#EF4444"
+RED_LIGHT = "#FEE2E2"
+AMBER = "#B45309"
 AMBER_LIGHT = "#FEF3C7"
-BLUE = "#155EEF"
+BLUE = "#2563EB"
+WHATSAPP_BLUE = "#2563EB"
 MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -777,31 +781,50 @@ class CommitteeApp:
         self.summary_frame.pack(fill="x", pady=(0, 12))
         self.summary_values: dict[str, ttk.Label] = {}
         self.summary_details: dict[str, ttk.Label] = {}
+        self.summary_cards: list[tk.Frame] = []
+        self.summary_columns = 0
         summary_cards = (
-            ("members", "TOTAL MEMBERS"),
-            ("collection", "TOTAL COLLECTION"),
-            ("paid", "PAID THIS MONTH"),
-            ("unpaid", "OUTSTANDING"),
+            ("members", "TOTAL MEMBERS", BLUE),
+            ("collection", "TOTAL COLLECTION", GREEN),
+            ("paid", "PAID THIS MONTH", "#059669"),
+            ("unpaid", "TOTAL OUTSTANDING", RED),
         )
-        for key, label in summary_cards:
-            card = ttk.Frame(self.summary_frame, style="Card.TFrame", padding=(15, 11))
-            card.pack(side="left", fill="x", expand=True, padx=(0, 9))
+        for key, label, accent in summary_cards:
+            card = tk.Frame(
+                self.summary_frame,
+                bg=CARD,
+                highlightbackground=CARD_BORDER,
+                highlightthickness=1,
+                bd=0,
+            )
+            card.grid(
+                row=0,
+                column=len(self.summary_cards),
+                sticky="nsew",
+                padx=(0, 9),
+                pady=(0, 8),
+            )
+            self.summary_cards.append(card)
+            tk.Frame(card, bg=accent, height=5).pack(fill="x")
+            body = ttk.Frame(card, style="Card.TFrame", padding=(15, 11))
+            body.pack(fill="both", expand=True)
             ttk.Label(
-                card, text=label, style="Card.TLabel", foreground=MUTED,
-                font=("Segoe UI", 10, "bold"),
+                body, text=label, style="Card.TLabel", foreground=MUTED,
+                font=("Segoe UI", 11, "bold"),
             ).pack(anchor="w")
             value = ttk.Label(
-                card, text="0", style="Card.TLabel",
-                font=("Segoe UI", 21, "bold"),
+                body, text="0", style="Card.TLabel", foreground=accent,
+                font=("Segoe UI", 25, "bold"),
             )
             value.pack(anchor="w", pady=(3, 0))
             self.summary_values[key] = value
             detail = ttk.Label(
-                card, text="", style="Card.TLabel",
-                foreground=MUTED, font=("Segoe UI", 10),
+                body, text="", style="Card.TLabel",
+                foreground=MUTED, font=("Segoe UI", 11),
             )
             detail.pack(anchor="w", pady=(2, 0))
             self.summary_details[key] = detail
+        self.summary_frame.bind("<Configure>", self._layout_summary_cards)
 
         toolbar = ttk.Frame(outer)
         toolbar.pack(fill="x", pady=(0, 12))
@@ -876,6 +899,22 @@ class CommitteeApp:
             foreground=MUTED,
         )
         self.footer.pack(anchor="w", pady=(10, 0))
+
+    def _layout_summary_cards(self, event: tk.Event) -> None:
+        columns = 2 if event.width < 1050 else 4
+        if columns == self.summary_columns:
+            return
+        self.summary_columns = columns
+        for column in range(4):
+            self.summary_frame.columnconfigure(
+                column, weight=1 if column < columns else 0
+            )
+        for index, card in enumerate(self.summary_cards):
+            card.grid_configure(
+                row=index // columns,
+                column=index % columns,
+                sticky="nsew",
+            )
 
     def _default_month(self) -> str:
         now = date.today()
@@ -974,19 +1013,28 @@ class CommitteeApp:
             if only_owing and outstanding <= 0:
                 continue
 
-            card = ttk.Frame(
-                self.rows_frame, style="Card.TFrame", padding=(14, 10)
+            card = tk.Frame(
+                self.rows_frame,
+                bg=CARD,
+                highlightbackground=CARD_BORDER,
+                highlightthickness=1,
+                bd=0,
             )
             card.pack(fill="x", pady=(3, 6), padx=3)
             card.columnconfigure(0, weight=1)
 
-            top = ttk.Frame(card, style="Card.TFrame")
+            content = ttk.Frame(card, style="Card.TFrame", padding=(16, 14))
+            content.grid(row=0, column=0, sticky="ew")
+            content.columnconfigure(0, weight=1)
+            top = tk.Frame(content, bg=CARD)
             top.grid(row=0, column=0, sticky="ew")
-            name_label = ttk.Label(
+            name_label = tk.Label(
                 top,
-                text=f"{member.name}   ·   ID {member.member_id}",
-                style="Card.TLabel",
-                font=("Segoe UI", 15, "bold"),
+                text=member.name,
+                bg=CARD,
+                fg=TEXT,
+                anchor="w",
+                font=("Segoe UI", 18, "bold"),
             )
             name_label.pack(side="left")
 
@@ -998,49 +1046,60 @@ class CommitteeApp:
                 status, status_bg, status_fg = "UNPAID", RED_LIGHT, RED
             tk.Label(
                 top, text=status, bg=status_bg, fg=status_fg,
-                font=("Segoe UI", 11, "bold"), padx=15, pady=7,
+                font=("Segoe UI", 12, "bold"), padx=15, pady=8,
             ).pack(side="right")
 
+            member_id_label = tk.Label(
+                content,
+                text=f"MEMBER ID  {member.member_id}",
+                bg=CARD,
+                fg=MUTED,
+                anchor="w",
+                font=("Segoe UI", 11, "bold"),
+            )
+            member_id_label.grid(row=1, column=0, sticky="w", pady=(2, 0))
             detail = (
                 f"{month_label}: {self._format_amount(member.amount)} due"
                 f"     ·     {dues_count} installment(s) outstanding"
                 f"     ·     Total owed: {self._format_amount(outstanding)}"
             )
-            detail_label = ttk.Label(
-                card,
+            detail_label = tk.Label(
+                content,
                 text=detail,
-                style="Card.TLabel",
-                foreground=MUTED,
+                bg=CARD,
+                fg=MUTED,
+                anchor="w",
+                justify="left",
                 font=("Segoe UI", 12),
             )
-            detail_label.grid(row=1, column=0, sticky="w", pady=(6, 8))
+            detail_label.grid(row=2, column=0, sticky="w", pady=(8, 12))
 
-            actions = ttk.Frame(card, style="Card.TFrame")
-            actions.grid(row=2, column=0, sticky="ew")
+            actions = tk.Frame(content, bg=CARD)
+            actions.grid(row=3, column=0, sticky="ew")
             tk.Button(
                 actions,
                 text="MARK UNPAID" if collected_this_month > 0 else "MARK PAID",
                 command=lambda item=member: self.toggle_payment(item),
-                font=("Segoe UI", 12, "bold"),
+                font=("Segoe UI", 13, "bold"),
                 bg=RED if collected_this_month > 0 else GREEN,
                 fg="white",
-                activebackground="#991B1B" if collected_this_month > 0 else "#166534",
+                activebackground="#DC2626" if collected_this_month > 0 else "#059669",
                 activeforeground="white",
                 relief="flat",
-                padx=20,
-                pady=11,
+                padx=14,
+                pady=14,
             ).pack(side="left", padx=(0, 10))
             tk.Button(
                 actions,
                 text="COLLECT PART",
                 command=lambda item=member: self.collect_payment(item),
-                font=("Segoe UI", 11, "bold"),
+                font=("Segoe UI", 12, "bold"),
                 bg="#E7EEF8",
                 fg=TEXT,
                 activebackground="#D6E2F2",
                 relief="flat",
-                padx=16,
-                pady=11,
+                padx=14,
+                pady=14,
                 state="normal" if outstanding > 0 else "disabled",
             ).pack(side="left", padx=(0, 10))
             tk.Button(
@@ -1048,16 +1107,19 @@ class CommitteeApp:
                 text="WHATSAPP REMINDER",
                 command=lambda item=member: self.send_reminder(item),
                 font=("Segoe UI", 12, "bold"),
-                bg="#DCEBFF",
-                fg=BLUE,
-                activebackground="#C4DCFF",
+                bg=WHATSAPP_BLUE,
+                fg="white",
+                activebackground="#1D4ED8",
+                activeforeground="white",
                 relief="flat",
-                padx=18,
-                pady=11,
+                padx=14,
+                pady=14,
                 state="normal" if outstanding > 0 else "disabled",
             ).pack(side="left")
 
-            for widget in (card, top, name_label, detail_label):
+            for widget in (
+                card, content, top, name_label, member_id_label, detail_label,
+            ):
                 widget.bind("<MouseWheel>", self._on_mousewheel)
                 widget.bind("<ButtonPress-1>", self._start_touch_scroll)
                 widget.bind("<B1-Motion>", self._drag_touch_scroll)
